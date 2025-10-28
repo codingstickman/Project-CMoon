@@ -130,6 +130,8 @@ class CMoonBoard {
         const dueDateClass = this.getDueDateClass(card.dueDate);
         const dueDateDisplay = card.dueDate ? this.formatDate(card.dueDate) : '';
         const labelHTML = card.label ? `<div class="card-label ${card.label}"></div>` : '';
+        const priority = card.priority || 'none';
+        const priorityIcon = priority === 'high' ? '🔥' : priority === 'medium' ? '⬆️' : priority === 'low' ? '⬇️' : '';
 
         return `
             <div class="card" data-card-id="${card.id}" draggable="true">
@@ -148,6 +150,7 @@ class CMoonBoard {
                 <div class="card-meta">
                     <div class="card-meta-left">
                         ${labelHTML}
+                        ${priorityIcon ? `<span title="${priority} priority">${priorityIcon}</span>` : ''}
                     </div>
                     ${dueDateDisplay ? `
                         <div class="card-due-date ${dueDateClass}">
@@ -199,6 +202,22 @@ class CMoonBoard {
         document.getElementById('addListBtn').addEventListener('click', () => {
             this.showListModal();
         });
+        const showBoardBtn = document.getElementById('showBoardBtn');
+        const showCalendarBtn = document.getElementById('showCalendarBtn');
+        if (showBoardBtn && showCalendarBtn) {
+            showBoardBtn.addEventListener('click', () => {
+                document.querySelector('.board').style.display = '';
+                document.getElementById('calendarView').style.display = 'none';
+            });
+            showCalendarBtn.addEventListener('click', () => {
+                document.querySelector('.board').style.display = 'none';
+                document.getElementById('calendarView').style.display = '';
+                // Delegate to BoardsApp calendar render if available
+                if (window.__boardsAppInstance && window.__boardsAppInstance.renderCalendar) {
+                    window.__boardsAppInstance.renderCalendar();
+                }
+            });
+        }
 
         // Modal events
         this.bindModalEvents();
@@ -341,6 +360,7 @@ class CMoonBoard {
         document.getElementById('cardDescription').value = card.description || '';
         document.getElementById('cardDueDate').value = card.dueDate || '';
         document.getElementById('cardLabel').value = card.label || '';
+        document.getElementById('cardPriority').value = card.priority || 'none';
         
         document.getElementById('cardModal').classList.add('show');
         document.getElementById('cardTitle').focus();
@@ -351,6 +371,7 @@ class CMoonBoard {
         const description = document.getElementById('cardDescription').value.trim();
         const dueDate = document.getElementById('cardDueDate').value;
         const label = document.getElementById('cardLabel').value;
+        const priority = document.getElementById('cardPriority').value;
 
         if (!title) return;
 
@@ -358,7 +379,8 @@ class CMoonBoard {
             title,
             description,
             dueDate,
-            label
+            label,
+            priority
         };
 
         if (this.editingCardId) {
@@ -654,10 +676,10 @@ class BoardsApp {
         }
 
         // Global shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const cardModal = document.getElementById('cardModal');
-                const listModal = document.getElementById('listModal');
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const cardModal = document.getElementById('cardModal');
+        const listModal = document.getElementById('listModal');
                 const bModal = document.getElementById('boardModal');
                 if (cardModal.classList.contains('show')) cardModal.classList.remove('show');
                 if (listModal.classList.contains('show')) listModal.classList.remove('show');
@@ -711,6 +733,12 @@ class BoardsApp {
 
         this.currentBoard = new CMoonBoard({ storageKey: this.boardStoragePrefix + boardId });
         this.applyTheme(board.theme);
+        const boardEl = document.querySelector('.board');
+        const calEl = document.getElementById('calendarView');
+        if (boardEl && calEl) {
+            boardEl.style.display = '';
+            calEl.style.display = 'none';
+        }
     }
 
     showBoardModal(mode, board = null) {
@@ -790,9 +818,146 @@ class BoardsApp {
         document.documentElement.style.setProperty('--bg-grad-start', t.start);
         document.documentElement.style.setProperty('--bg-grad-end', t.end);
     }
+
+    renderCalendar() {
+        const container = document.getElementById('calendarView');
+        if (!container || !this.currentBoard) return;
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const startDay = firstDay.getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const monthName = firstDay.toLocaleString(undefined, { month: 'long' });
+        const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+        const itemsByDate = {};
+        this.currentBoard.lists.forEach(list => {
+            list.cards.forEach(card => {
+                if (!card.dueDate) return;
+                const d = new Date(card.dueDate);
+                if (d.getFullYear() === year && d.getMonth() === month) {
+                    const key = d.getDate();
+                    if (!itemsByDate[key]) itemsByDate[key] = [];
+                    itemsByDate[key].push(card);
+                }
+            });
+        });
+
+        let html = '';
+        html += `<div class="calendar-header">${monthName}</div>`;
+        html += '<div class="calendar-weekdays">';
+        weekdays.forEach(d => { html += `<div class="weekday">${d}</div>`; });
+        html += '</div>';
+        html += '<div class="calendar-grid">';
+        for (let i = 0; i < startDay; i++) {
+            html += '<div class="calendar-day"></div>';
+        }
+        for (let day = 1; day <= daysInMonth; day++) {
+            const items = itemsByDate[day] || [];
+            html += `<div class="calendar-day">`;
+            html += `<div class="date">${day}</div>`;
+            items
+                .sort((a,b) => this.priorityWeight(b.priority) - this.priorityWeight(a.priority))
+                .forEach(card => {
+                    const pr = card.priority || 'none';
+                    const cls = `priority-${pr}`;
+                    html += `<div class="calendar-item ${cls}" data-card-id="${card.id}">${this.escapeHtml(card.title)}</div>`;
+                });
+            html += `</div>`;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.calendar-item').forEach(el => {
+            el.addEventListener('click', () => {
+                const cardId = el.getAttribute('data-card-id');
+                this.cycleCardPriority(cardId);
+                this.renderCalendar();
+                this.currentBoard.renderBoard();
+            });
+        });
+    }
+
+    priorityWeight(p) {
+        if (p === 'high') return 3;
+        if (p === 'medium') return 2;
+        if (p === 'low') return 1;
+        return 0;
+    }
+
+    cycleCardPriority(cardId) {
+        const card = this.currentBoard.findCard(cardId);
+        if (!card) return;
+        const order = ['none','low','medium','high'];
+        const idx = order.indexOf(card.priority || 'none');
+        const next = order[(idx + 1) % order.length];
+        card.priority = next;
+        this.currentBoard.saveToStorage();
+    }
+
+    getBoardEvents(boardId) {
+        const board = this.getBoards().find(b => b.id === boardId);
+        if (!board) return [];
+
+        const events = [];
+        board.lists.forEach(list => {
+            list.cards.forEach(card => {
+                if (card.dueDate) {
+                    events.push({
+                        id: card.id,
+                        title: card.title,
+                        start: card.dueDate,
+                        end: card.dueDate,
+                        allDay: true,
+                        backgroundColor: this.getCardLabelColor(card.label),
+                        borderColor: this.getCardLabelColor(card.label),
+                        textColor: 'white'
+                    });
+                }
+            });
+        });
+        return events;
+    }
+
+    getCardLabelColor(label) {
+        switch (label) {
+            case 'red': return '#ef4444';
+            case 'orange': return '#f97316';
+            case 'yellow': return '#f59e0b';
+            case 'green': return '#10b981';
+            case 'blue': return '#667eea';
+            case 'purple': return '#8b5cf6';
+            case 'pink': return '#e11d48';
+            default: return '#667eea'; // Default color
+        }
+    }
+
+    handleEventClick(info) {
+        const card = this.findCard(info.event.id);
+        if (card) {
+            this.editCard(card.id);
+        }
+    }
+
+    handleEventDrop(info) {
+        const card = this.findCard(info.event.id);
+        if (card) {
+            const newDueDate = info.event.start.toISOString().split('T')[0];
+            this.updateCard(card.id, { dueDate: newDueDate });
+        }
+    }
+
+    handleEventResize(info) {
+        const card = this.findCard(info.event.id);
+        if (card) {
+            const newDueDate = info.event.start.toISOString().split('T')[0];
+            this.updateCard(card.id, { dueDate: newDueDate });
+        }
+    }
 }
 
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new BoardsApp();
+    window.__boardsAppInstance = new BoardsApp();
 });

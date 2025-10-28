@@ -33,6 +33,10 @@
                 <div class="board-toolbar">
                     <button class="btn btn-secondary" id="backToBoardsBtn"><i class="fas fa-arrow-left"></i> Boards</button>
                     <h2 id="currentBoardTitle"></h2>
+                    <div style="margin-left:auto; display:flex; gap:0.5rem;">
+                        <button class="btn btn-secondary" id="showBoardBtn"><i class="fas fa-table-columns"></i> Board</button>
+                        <button class="btn btn-secondary" id="showCalendarBtn"><i class="fas fa-calendar"></i> Calendar</button>
+                    </div>
                 </div>
                 <div class="board">
                     <div class="lists-container" id="listsContainer">
@@ -43,6 +47,7 @@
                         <i class="fas fa-plus"></i> Add a list
                     </button>
                 </div>
+                <div class="calendar" id="calendarView" style="display:none;"></div>
             </div>
         </main>
     </div>
@@ -69,6 +74,15 @@
                     <div class="form-group">
                         <label for="cardDueDate">Due Date</label>
                         <input type="date" id="cardDueDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="cardPriority">Priority</label>
+                        <select id="cardPriority">
+                            <option value="none">None</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label for="cardLabel">Label</label>
