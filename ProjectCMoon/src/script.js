@@ -429,17 +429,21 @@ class CMoonBoard {
     moveCard(cardId, targetListId) {
         const sourceList = this.findListContainingCard(cardId);
         const targetList = this.lists.find(l => l.id === targetListId);
-        
         if (!sourceList || !targetList || sourceList.id === targetListId) return;
 
+        // Update data first
         const card = sourceList.cards.find(c => c.id === cardId);
         if (!card) return;
-
         sourceList.cards = sourceList.cards.filter(c => c.id !== cardId);
         targetList.cards.push(card);
-        
         this.saveToStorage();
-        this.renderBoard();
+
+        // Minimal DOM update to avoid full re-render flash
+        const cardEl = this.draggedCard || document.querySelector(`.card[data-card-id="${cardId}"]`);
+        const targetContainer = document.querySelector(`.cards-container[data-list-id="${targetListId}"]`);
+        if (cardEl && targetContainer) {
+            targetContainer.appendChild(cardEl);
+        }
     }
 
     // List Operations
