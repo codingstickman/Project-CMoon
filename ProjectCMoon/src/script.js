@@ -731,7 +731,14 @@ document.addEventListener('keydown', (e) => {
         document.getElementById('boardView').style.display = '';
         window.location.hash = `#/board/${boardId}`;
 
-        this.currentBoard = new CMoonBoard({ storageKey: this.boardStoragePrefix + boardId });
+        if (this.currentBoard) {
+            // Reuse existing instance to avoid rebinding global listeners
+            this.currentBoard.storageKey = this.boardStoragePrefix + boardId;
+            this.currentBoard.lists = this.currentBoard.loadFromStorage();
+            this.currentBoard.renderBoard();
+        } else {
+            this.currentBoard = new CMoonBoard({ storageKey: this.boardStoragePrefix + boardId });
+        }
         this.applyTheme(board.theme);
         const boardEl = document.querySelector('.board');
         const calEl = document.getElementById('calendarView');
