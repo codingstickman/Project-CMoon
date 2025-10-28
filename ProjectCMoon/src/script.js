@@ -1,6 +1,7 @@
 // CMoon - Trello-like Project Management Board
 class CMoonBoard {
-    constructor() {
+    constructor(options = {}) {
+        this.storageKey = options.storageKey || 'cmoon-board';
         this.lists = this.loadFromStorage();
         this.draggedCard = null;
         this.draggedFromList = null;
@@ -18,12 +19,12 @@ class CMoonBoard {
 
     // Data Management
     loadFromStorage() {
-        const saved = localStorage.getItem('cmoon-board');
+        const saved = localStorage.getItem(this.storageKey);
         return saved ? JSON.parse(saved) : [];
     }
 
     saveToStorage() {
-        localStorage.setItem('cmoon-board', JSON.stringify(this.lists));
+        localStorage.setItem(this.storageKey, JSON.stringify(this.lists));
     }
 
     generateId() {
@@ -531,29 +532,267 @@ class CMoonBoard {
     }
 }
 
+class BoardsApp {
+    constructor() {
+        this.currentBoardId = null;
+        this.currentBoard = null;
+        this.boardStoragePrefix = 'cmoon-board-';
+        this.boardsKey = 'cmoon-boards';
+        this.themePresets = [
+            { id: 'indigo', primary: '#667eea', start: '#667eea', end: '#764ba2' },
+            { id: 'teal', primary: '#14b8a6', start: '#0ea5e9', end: '#14b8a6' },
+            { id: 'sunset', primary: '#f97316', start: '#f59e0b', end: '#ef4444' },
+            { id: 'rose', primary: '#e11d48', start: '#fb7185', end: '#e11d48' },
+            { id: 'emerald', primary: '#10b981', start: '#34d399', end: '#10b981' },
+            { id: 'violet', primary: '#8b5cf6', start: '#6366f1', end: '#8b5cf6' },
+            { id: 'grape', primary: '#7c3aed', start: '#a855f7', end: '#7c3aed' },
+            { id: 'ocean', primary: '#0ea5e9', start: '#22d3ee', end: '#0ea5e9' },
+            { id: 'amber', primary: '#f59e0b', start: '#fbbf24', end: '#f59e0b' },
+            { id: 'slate', primary: '#334155', start: '#64748b', end: '#334155' }
+        ];
+        this.init();
+    }
+
+    init() {
+        this.renderBoardsView();
+        this.bindEvents();
+        this.routeOnLoad();
+    }
+
+    getBoards() {
+        const saved = localStorage.getItem(this.boardsKey);
+        return saved ? JSON.parse(saved) : [];
+    }
+
+    saveBoards(boards) {
+        localStorage.setItem(this.boardsKey, JSON.stringify(boards));
+    }
+
+    renderBoardsView() {
+        const boardsContainer = document.getElementById('boardsContainer');
+        const boards = this.getBoards();
+        boardsContainer.innerHTML = '';
+
+        if (boards.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-list';
+            empty.textContent = 'No boards yet. Create your first board to get started!';
+            boardsContainer.appendChild(empty);
+            return;
+        }
+
+        boards.forEach(board => {
+            const card = document.createElement('div');
+            card.className = 'board-card';
+            card.setAttribute('data-board-id', board.id);
+            const swatchColor = (board.theme && board.theme.primary) || '#667eea';
+            card.innerHTML = `
+                <div class="board-card-title">${this.escapeHtml(board.title)}</div>
+                <div class="board-card-actions">
+                    <span class="swatch" style="background:${swatchColor}"></span>
+                    <button class="btn btn-secondary rename-board-btn"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-secondary delete-board-btn"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.rename-board-btn') || e.target.closest('.delete-board-btn')) return;
+                this.openBoard(board.id);
+            });
+            card.querySelector('.rename-board-btn').addEventListener('click', () => this.showBoardModal('rename', board));
+            card.querySelector('.delete-board-btn').addEventListener('click', () => this.deleteBoard(board.id));
+            boardsContainer.appendChild(card);
+        });
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    bindEvents() {
+        const createBtn = document.getElementById('createBoardBtn');
+        const backBtn = document.getElementById('backToBoardsBtn');
+        const boardModal = document.getElementById('boardModal');
+        const closeBoardModal = document.getElementById('closeBoardModal');
+        const cancelBoard = document.getElementById('cancelBoard');
+        const boardForm = document.getElementById('boardForm');
+        const themeOptions = document.getElementById('boardThemeOptions');
+
+        createBtn.addEventListener('click', () => this.showBoardModal('create'));
+        backBtn.addEventListener('click', () => this.showBoards());
+
+        closeBoardModal.addEventListener('click', () => this.hideBoardModal());
+        cancelBoard.addEventListener('click', () => this.hideBoardModal());
+        boardModal.addEventListener('click', (e) => { if (e.target === boardModal) this.hideBoardModal(); });
+
+        boardForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const title = document.getElementById('boardTitle').value.trim();
+            const selectedThemeId = this.selectedThemeId || 'indigo';
+            const theme = this.themePresets.find(t => t.id === selectedThemeId);
+            if (!title) return;
+            if (this.boardModalMode === 'create') {
+                this.createBoard(title, theme);
+            } else if (this.boardModalMode === 'rename' && this.boardModalBoardId) {
+                this.renameBoard(this.boardModalBoardId, title, theme);
+            }
+            this.hideBoardModal();
+        });
+
+        // Render theme options
+        if (themeOptions) {
+            themeOptions.innerHTML = '';
+            this.themePresets.forEach(preset => {
+                const div = document.createElement('div');
+                div.className = 'theme-swatch';
+                div.style.background = `linear-gradient(135deg, ${preset.start} 0%, ${preset.end} 100%)`;
+                div.title = preset.id;
+                div.addEventListener('click', () => this.selectTheme(preset.id));
+                themeOptions.appendChild(div);
+            });
+        }
+
+        // Global shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const cardModal = document.getElementById('cardModal');
+                const listModal = document.getElementById('listModal');
+                const bModal = document.getElementById('boardModal');
+                if (cardModal.classList.contains('show')) cardModal.classList.remove('show');
+                if (listModal.classList.contains('show')) listModal.classList.remove('show');
+                if (bModal.classList.contains('show')) bModal.classList.remove('show');
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                if (this.currentBoard) {
+                    e.preventDefault();
+                    document.getElementById('addListBtn').click();
+                }
+            }
+        });
+    }
+
+    routeOnLoad() {
+        const hash = window.location.hash;
+        if (hash.startsWith('#/board/')) {
+            const boardId = hash.replace('#/board/', '');
+            this.openBoard(boardId);
+        } else {
+            this.showBoards();
+        }
+        window.addEventListener('hashchange', () => this.routeOnLoad());
+    }
+
+    showBoards() {
+        this.currentBoardId = null;
+        this.currentBoard = null;
+        document.getElementById('boardsView').style.display = '';
+        document.getElementById('boardView').style.display = 'none';
+        // Reset to default theme for home page
+        this.applyDefaultTheme();
+        this.renderBoardsView();
+        if (window.location.hash !== '#/boards') {
+            window.location.hash = '#/boards';
+        }
+    }
+
+    openBoard(boardId) {
+        const boards = this.getBoards();
+        const board = boards.find(b => b.id === boardId);
+        if (!board) {
+            this.showBoards();
+            return;
+        }
+        this.currentBoardId = boardId;
+        document.getElementById('currentBoardTitle').textContent = board.title;
+        document.getElementById('boardsView').style.display = 'none';
+        document.getElementById('boardView').style.display = '';
+        window.location.hash = `#/board/${boardId}`;
+
+        this.currentBoard = new CMoonBoard({ storageKey: this.boardStoragePrefix + boardId });
+        this.applyTheme(board.theme);
+    }
+
+    showBoardModal(mode, board = null) {
+        this.boardModalMode = mode;
+        this.boardModalBoardId = board ? board.id : null;
+        document.getElementById('boardModalTitle').textContent = mode === 'create' ? 'Create Board' : 'Rename Board';
+        const input = document.getElementById('boardTitle');
+        input.value = board ? board.title : '';
+        document.getElementById('boardModal').classList.add('show');
+        input.focus();
+        const defaultThemeId = (board && board.theme && board.theme.id) || 'indigo';
+        this.selectTheme(defaultThemeId);
+    }
+
+    hideBoardModal() {
+        document.getElementById('boardModal').classList.remove('show');
+        this.boardModalMode = null;
+        this.boardModalBoardId = null;
+    }
+
+    createBoard(title, theme) {
+        const boards = this.getBoards();
+        const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        boards.push({ id, title, theme: { id: theme.id, primary: theme.primary, start: theme.start, end: theme.end } });
+        this.saveBoards(boards);
+        this.renderBoardsView();
+        this.openBoard(id);
+    }
+
+    renameBoard(boardId, newTitle, theme) {
+        const boards = this.getBoards();
+        const board = boards.find(b => b.id === boardId);
+        if (!board) return;
+        board.title = newTitle;
+        if (theme) {
+            board.theme = { id: theme.id, primary: theme.primary, start: theme.start, end: theme.end };
+        }
+        this.saveBoards(boards);
+        document.getElementById('currentBoardTitle').textContent = newTitle;
+        this.renderBoardsView();
+        if (this.currentBoardId === boardId) {
+            this.applyTheme(board.theme);
+        }
+    }
+
+    deleteBoard(boardId) {
+        const boards = this.getBoards();
+        const board = boards.find(b => b.id === boardId);
+        if (!board) return;
+        if (!confirm(`Delete board "${board.title}"? This cannot be undone.`)) return;
+        const filtered = boards.filter(b => b.id !== boardId);
+        this.saveBoards(filtered);
+        // Remove its lists storage
+        localStorage.removeItem(this.boardStoragePrefix + boardId);
+        this.renderBoardsView();
+        if (this.currentBoardId === boardId) {
+            this.showBoards();
+        }
+    }
+
+    selectTheme(themeId) {
+        this.selectedThemeId = themeId;
+        const options = document.querySelectorAll('#boardThemeOptions .theme-swatch');
+        options.forEach(o => o.classList.toggle('selected', o.title === themeId));
+    }
+
+    applyTheme(theme) {
+        const t = theme || { primary: '#667eea', start: '#667eea', end: '#764ba2' };
+        document.documentElement.style.setProperty('--primary', t.primary);
+        document.documentElement.style.setProperty('--bg-grad-start', t.start);
+        document.documentElement.style.setProperty('--bg-grad-end', t.end);
+    }
+
+    applyDefaultTheme() {
+        const t = { primary: '#667eea', start: '#667eea', end: '#764ba2' };
+        document.documentElement.style.setProperty('--primary', t.primary);
+        document.documentElement.style.setProperty('--bg-grad-start', t.start);
+        document.documentElement.style.setProperty('--bg-grad-end', t.end);
+    }
+}
+
 // Initialize the application when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new CMoonBoard();
-});
-
-// Add some keyboard shortcuts
-document.addEventListener('keydown', (e) => {
-    // Escape key to close modals
-    if (e.key === 'Escape') {
-        const cardModal = document.getElementById('cardModal');
-        const listModal = document.getElementById('listModal');
-        
-        if (cardModal.classList.contains('show')) {
-            cardModal.classList.remove('show');
-        }
-        if (listModal.classList.contains('show')) {
-            listModal.classList.remove('show');
-        }
-    }
-    
-    // Ctrl/Cmd + N to add new list
-    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault();
-        document.getElementById('addListBtn').click();
-    }
+    new BoardsApp();
 });

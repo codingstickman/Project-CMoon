@@ -17,14 +17,32 @@
         </header>
 
         <main class="main-content">
-            <div class="board">
-                <div class="lists-container" id="listsContainer">
-                    <!-- Lists will be dynamically added here -->
+            <!-- Boards Landing View -->
+            <div class="boards-view" id="boardsView">
+                <div class="boards-header">
+                    <h2>Boards</h2>
+                    <button class="btn btn-primary" id="createBoardBtn"><i class="fas fa-plus"></i> Create board</button>
                 </div>
-                
-                <button class="add-list-btn" id="addListBtn">
-                    <i class="fas fa-plus"></i> Add a list
-                </button>
+                <div class="boards-grid" id="boardsContainer">
+                    <!-- Boards will be listed here -->
+                </div>
+            </div>
+
+            <!-- Single Board View -->
+            <div class="board-view" id="boardView" style="display:none;">
+                <div class="board-toolbar">
+                    <button class="btn btn-secondary" id="backToBoardsBtn"><i class="fas fa-arrow-left"></i> Boards</button>
+                    <h2 id="currentBoardTitle"></h2>
+                </div>
+                <div class="board">
+                    <div class="lists-container" id="listsContainer">
+                        <!-- Lists will be dynamically added here -->
+                    </div>
+                    
+                    <button class="add-list-btn" id="addListBtn">
+                        <i class="fas fa-plus"></i> Add a list
+                    </button>
+                </div>
             </div>
         </main>
     </div>
@@ -90,6 +108,34 @@
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="cancelList">Cancel</button>
                         <button type="submit" class="btn btn-primary">Save List</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for creating/renaming boards -->
+    <div class="modal" id="boardModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="boardModalTitle">Create Board</h3>
+                <button class="close-btn" id="closeBoardModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="boardForm">
+                    <div class="form-group">
+                        <label for="boardTitle">Board Name</label>
+                        <input type="text" id="boardTitle" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Theme</label>
+                        <div class="theme-options" id="boardThemeOptions"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelBoard">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Board</button>
                     </div>
                 </form>
             </div>
