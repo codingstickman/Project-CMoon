@@ -52,6 +52,16 @@
         </main>
     </div>
 
+    <!-- AI Chat Sidebar -->
+    <div id="ai-chat-sidebar" class="ai-chat-sidebar">
+        <div class="ai-chat-header">AI Assistant <button id="aiChatCloseBtn" class="ai-chat-close-btn"><i class="fas fa-xmark"></i></button></div>
+        <div class="ai-chat-messages" id="aiChatMessages"></div>
+        <form id="aiChatForm" class="ai-chat-form">
+            <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask the AI..." autocomplete="off" />
+            <button type="submit" class="ai-chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+        </form>
+    </div>
+
     <!-- Modal for adding/editing cards -->
     <div class="modal" id="cardModal">
         <div class="modal-content">
@@ -157,5 +167,6 @@
     </div>
 
     <script src="/src/script.js"></script>
+    <script type="module" src="/src/chat.js"></script>
 </body>
 </html>
